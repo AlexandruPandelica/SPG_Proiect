@@ -12,7 +12,7 @@
 #endif
 
 // Variabile pentru texturi
-GLuint texFront, texBack, texLeft, texRight, texTop, texBottom, texGrass, texStone, texRoad, texBuilding, texTree, texLake;
+GLuint texFront, texBack, texLeft, texRight, texTop, texBottom, texGrass, texStone, texRoad, texBuilding, texTree, texLake, texShadow, texLamp;
 
 // Variabile pentru camera (Pozitie si Rotatie)
 float camX = 0.0f, camY = 3.0f, camZ = 50.0f;
@@ -23,7 +23,7 @@ float camAngleY = 0.0f;
 int lastX, lastY;
 bool mouseDown = false;
 
-/* ==================== ÎNC?RCARE TEXTURI ==================== */
+/* ==================== INCARCARE TEXTURI ==================== */
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -55,6 +55,24 @@ GLuint LoadTexture(const char* filename, bool wrap) {
     return texture;
 }
 
+/* ==================== SISTEM DE LUMINA ==================== */
+void SetupLighting() {
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+
+    GLfloat lightPos[] = { 150.0f, 400.0f, 150.0f, 1.0f };
+    glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
+    GLfloat ambient[] = { 0.15f, 0.15f, 0.2f, 1.0f };
+
+    GLfloat diffuse[] = { 0.3f, 0.3f, 0.35f, 1.0f };
+
+    glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuse);
+
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
+}
+
 /* ==================== DESENARE SCENA ==================== */
 
 void DrawSkybox() {
@@ -63,7 +81,7 @@ void DrawSkybox() {
     glEnable(GL_TEXTURE_2D);
     glColor3f(1.0f, 1.0f, 1.0f);
 
-    // FA??
+    // FATA
     glBindTexture(GL_TEXTURE_2D, texFront);
     glBegin(GL_QUADS);
     glTexCoord2f(0, 0); glVertex3f(-s, -s, s);
@@ -145,7 +163,7 @@ void DrawRelief() {
             }
 
             float distLac = sqrt(pow(x - 300.0f, 2) + pow(z - 300.0f, 2));
-            if (distLac < 80.0f) continue; 
+            if (distLac < 80.0f) continue;
         }
     }
     glEnd();
@@ -175,7 +193,7 @@ void DrawCircuit() {
     glColor3f(1.0f, 1.0f, 1.0f);
 
     float latimeDrum = 20.0f;
-    float razaGiratoriu = 135.0f; 
+    float razaGiratoriu = 135.0f;
 
     // Sensul giratoriu
     glBegin(GL_QUAD_STRIP);
@@ -192,7 +210,7 @@ void DrawCircuit() {
     glEnd();
 
 
-    float lungimeDrum = 800.0f; 
+    float lungimeDrum = 800.0f;
 
     for (int j = 0; j < 4; j++) {
         float unghiIesire = j * 90.0f * PI / 180.0f;
@@ -222,17 +240,17 @@ void DrawCircuit() {
 
 
 void DrawRoadMarkings() {
-    glDisable(GL_TEXTURE_2D); 
-    glColor3f(1.0f, 1.0f, 1.0f); 
+    glDisable(GL_TEXTURE_2D);
+    glColor3f(1.0f, 1.0f, 1.0f);
 
     float lungimeLinie = 10.0f;
     float spatiuIntre = 20.0f;
     float latimeLinie = 1.0f;
-    float inaltimeMarkaj = -9.85f; 
+    float inaltimeMarkaj = -9.85f;
     // Desenam marcaje pe cele 4 directii 
     for (float d = 160.0f; d < 920.0f; d += (lungimeLinie + spatiuIntre)) {
         glBegin(GL_QUADS);
-        
+
         glVertex3f(-latimeLinie, inaltimeMarkaj, d);
         glVertex3f(latimeLinie, inaltimeMarkaj, d);
         glVertex3f(latimeLinie, inaltimeMarkaj, d + lungimeLinie);
@@ -259,7 +277,27 @@ void DrawRoadMarkings() {
 }
 
 void DrawBuilding(float x, float z, float w, float h, float d) {
-    glBindTexture(GL_TEXTURE_2D, texBuilding); 
+
+    glDisable(GL_LIGHTING); glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND); glColor4f(0.0f, 0.0f, 0.0f, 0.4f);
+    glBegin(GL_QUADS);
+    glVertex3f(x - w / 1.8f + 8.0f, -9.96f, z + d / 1.8f + 8.0f);
+    glVertex3f(x + w / 1.8f + 25.0f, -9.96f, z + d / 1.8f + 8.0f);
+    glVertex3f(x + w / 1.8f + 25.0f, -9.96f, z - d / 1.8f + 8.0f);
+    glVertex3f(x - w / 1.8f + 8.0f, -9.96f, z - d / 1.8f + 8.0f);
+    glEnd();
+    glEnable(GL_LIGHTING); glEnable(GL_TEXTURE_2D);
+
+
+    glBindTexture(GL_TEXTURE_2D, texBuilding);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glBegin(GL_QUADS);
+    glNormal3f(0, 0, 1);
+    glTexCoord2f(0, 0); glVertex3f(x - w / 2, -10, z + d / 2);
+    glTexCoord2f(w / 20, 0); glVertex3f(x + w / 2, -10, z + d / 2);
+    glTexCoord2f(w / 20, h / 20); glVertex3f(x + w / 2, -10 + h, z + d / 2);
+    glTexCoord2f(0, h / 20); glVertex3f(x - w / 2, -10 + h, z + d / 2);
+    glBindTexture(GL_TEXTURE_2D, texBuilding);
 
     float repeatW = w / 20.0f;
     float repeatH = h / 20.0f;
@@ -299,8 +337,7 @@ void DrawBuilding(float x, float z, float w, float h, float d) {
 
     //Pentru a reda umbre pentru cladiri
     glDisable(GL_TEXTURE_2D);
-    glColor4f(0.0f, 0.0f, 0.0f, 0.3f); // Negru transparent (umbra)
-    glBegin(GL_QUADS);
+    glColor4f(0.0f, 0.0f, 0.0f, 0.3f); 
     glVertex3f(x - w / 1.8, -9.95f, z + d / 1.8);
     glVertex3f(x + w / 1.8, -9.95f, z + d / 1.8);
     glVertex3f(x + w / 1.8, -9.95f, z - d / 1.8);
@@ -338,7 +375,7 @@ void DrawLake(float centerX, float centerZ, float radius) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     float timp = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-    float valuri = sin(timp * 2.0f) * 0.1f; 
+    float valuri = sin(timp * 2.0f) * 0.1f;
 
     glBindTexture(GL_TEXTURE_2D, texLake);
     glColor4f(0.0f, 0.5f, 0.9f, 0.6f); // Albastru cu transparenta 60%
@@ -355,52 +392,279 @@ void DrawLake(float centerX, float centerZ, float radius) {
     glColor3f(1.0f, 1.0f, 1.0f);
 }
 
-void DrawLampPost(float x, float z) {
-    glBindTexture(GL_TEXTURE_2D, texStone);
-    glBegin(GL_QUADS);
-    // Fata
-    glTexCoord2f(0, 0); glVertex3f(x - 0.5f, -10.0f, z + 0.5f);
-    glTexCoord2f(1, 0); glVertex3f(x + 0.5f, -10.0f, z + 0.5f);
-    glTexCoord2f(1, 1); glVertex3f(x + 0.5f, 20.0f, z + 0.5f);
-    glTexCoord2f(0, 1); glVertex3f(x - 0.5f, 20.0f, z + 0.5f);
-    // Spate
-    glTexCoord2f(0, 0); glVertex3f(x - 0.5f, -10.0f, z - 0.5f);
-    glTexCoord2f(1, 0); glVertex3f(x + 0.5f, -10.0f, z - 0.5f);
-    glTexCoord2f(1, 1); glVertex3f(x + 0.5f, 20.0f, z - 0.5f);
-    glTexCoord2f(0, 1); glVertex3f(x - 0.5f, 20.0f, z - 0.5f);
-    // Stanga
-    glTexCoord2f(0, 0); glVertex3f(x - 0.5f, -10.0f, z - 0.5f);
-    glTexCoord2f(1, 0); glVertex3f(x - 0.5f, -10.0f, z + 0.5f);
-    glTexCoord2f(1, 1); glVertex3f(x - 0.5f, 20.0f, z + 0.5f);
-    glTexCoord2f(0, 1); glVertex3f(x - 0.5f, 20.0f, z - 0.5f);
-    // Dreapta
-    glTexCoord2f(0, 0); glVertex3f(x + 0.5f, -10.0f, z + 0.5f);
-    glTexCoord2f(1, 0); glVertex3f(x + 0.5f, -10.0f, z - 0.5f);
-    glTexCoord2f(1, 1); glVertex3f(x + 0.5f, 20.0f, z - 0.5f);
-    glTexCoord2f(0, 1); glVertex3f(x + 0.5f, 20.0f, z + 0.5f);
+void DrawLightCone(float x, float y, float z, float rotY) {
+    glPushMatrix();
+    glTranslatef(x, y, z);
+    glRotatef(rotY, 0, 1, 0);
+
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glBegin(GL_TRIANGLE_FAN);
+
+    glColor4f(1.0f, 1.0f, 0.7f, 0.3f);
+    glVertex3f(0, 0, 0);
+
+
+    for (int i = 0; i <= 30; i++) { 
+        float angle = i * 2.0f * PI / 30.0f;
+        glColor4f(1.0f, 1.0f, 0.7f, 0.0f);
+        glVertex3f(cos(angle) * 10.0f, -30.0f, sin(angle) * 10.0f);
+    }
     glEnd();
 
-    // --- BECUL
-    glDisable(GL_TEXTURE_2D);
-    glColor3f(1.0f, 1.0f, 0.5f);
-    glBegin(GL_QUADS);
-    // Fata
-    glVertex3f(x - 1.5f, 18.0f, z + 1.5f); glVertex3f(x + 1.5f, 18.0f, z + 1.5f);
-    glVertex3f(x + 1.5f, 21.0f, z + 1.5f); glVertex3f(x - 1.5f, 21.0f, z + 1.5f);
-    // Spate
-    glVertex3f(x - 1.5f, 18.0f, z - 1.5f); glVertex3f(x + 1.5f, 18.0f, z - 1.5f);
-    glVertex3f(x + 1.5f, 21.0f, z - 1.5f); glVertex3f(x - 1.5f, 21.0f, z - 1.5f);
-    // Tavan bec
-    glVertex3f(x - 1.5f, 21.0f, z + 1.5f); glVertex3f(x + 1.5f, 21.0f, z + 1.5f);
-    glVertex3f(x + 1.5f, 21.0f, z - 1.5f); glVertex3f(x - 1.5f, 21.0f, z - 1.5f);
-    glEnd();
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+    glPopMatrix();
+}
+
+void DrawSoftLight(float x, float y, float z, float r) {
+    glPushMatrix();
+    glTranslatef(x, y, z);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glDisable(GL_LIGHTING);
     glEnable(GL_TEXTURE_2D);
-    glColor3f(1.0f, 1.0f, 1.0f);
+
+    glBindTexture(GL_TEXTURE_2D, texShadow);
+
+    glColor4f(1.0f, 1.0f, 0.7f, 0.4f);
+
+    glBegin(GL_QUADS);
+    glNormal3f(0.0f, 1.0f, 0.0f); 
+    glTexCoord2f(0, 0); glVertex3f(-r, -9.98f, -r);
+    glTexCoord2f(1, 0); glVertex3f(r, -9.98f, -r);
+    glTexCoord2f(1, 1); glVertex3f(r, -9.98f, r);
+    glTexCoord2f(0, 1); glVertex3f(-r, -9.98f, r);
+    glEnd();
+
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+    glPopMatrix();
+}
+
+
+void DrawGroundProjection(float x, float y, float z) {
+    glPushMatrix();
+    glTranslatef(x, y, z);
+
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_TEXTURE_2D); 
+
+    glBegin(GL_TRIANGLE_FAN);
+
+    glColor4f(1.0f, 1.0f, 0.8f, 0.7f);
+    glVertex3f(0.0f, 0.03f, 0.0f);
+
+    for (int i = 0; i <= 36; i++) {
+        float angle = i * 10.0f * PI / 180.0f;
+
+        float noise = 1.0f +
+            0.3f * sin(angle * 4.0f) +
+            0.15f * cos(angle * 8.0f) +
+            0.1f * sin(angle * 2.0f);
+
+        float radius = 8.0f * noise;
+        glColor4f(1.0f, 1.0f, 0.8f, 0.0f);
+        glVertex3f(cos(angle) * radius, 0.0f, sin(angle) * radius);
+    }
+    glEnd();
+
+    glEnable(GL_LIGHTING);
+    glDisable(GL_BLEND);
+    glPopMatrix();
+}
+
+
+void DrawLampPost(float x, float z, float facingAngle, bool transparentPass) {
+    glPushMatrix();
+    glTranslatef(x, 0.0f, z);
+    glRotatef(facingAngle, 0.0f, 1.0f, 0.0f);
+
+    if (!transparentPass) {
+
+        glEnable(GL_LIGHTING);
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, texLamp);
+        glColor3f(1.0f, 1.0f, 1.0f);
+
+        glBegin(GL_QUADS);
+
+        glNormal3f(0.0f, 0.0f, 1.0f);
+        glTexCoord2f(0, 0); glVertex3f(-0.5f, -10.0f, 0.5f);
+        glTexCoord2f(1, 0); glVertex3f(0.5f, -10.0f, 0.5f);
+        glTexCoord2f(1, 5); glVertex3f(0.5f, 20.0f, 0.5f);
+        glTexCoord2f(0, 5); glVertex3f(-0.5f, 20.0f, 0.5f);
+
+        glNormal3f(0.0f, 0.0f, -1.0f);
+        glTexCoord2f(0, 0); glVertex3f(0.5f, -10.0f, -0.5f);
+        glTexCoord2f(1, 0); glVertex3f(-0.5f, -10.0f, -0.5f);
+        glTexCoord2f(1, 5); glVertex3f(-0.5f, 20.0f, -0.5f);
+        glTexCoord2f(0, 5); glVertex3f(0.5f, 20.0f, -0.5f);
+
+        glNormal3f(-1.0f, 0.0f, 0.0f);
+        glTexCoord2f(0, 0); glVertex3f(-0.5f, -10.0f, -0.5f);
+        glTexCoord2f(1, 0); glVertex3f(-0.5f, -10.0f, 0.5f);
+        glTexCoord2f(1, 5); glVertex3f(-0.5f, 20.0f, 0.5f);
+        glTexCoord2f(0, 5); glVertex3f(-0.5f, 20.0f, -0.5f);
+
+        glNormal3f(1.0f, 0.0f, 0.0f);
+        glTexCoord2f(0, 0); glVertex3f(0.5f, -10.0f, 0.5f);
+        glTexCoord2f(1, 0); glVertex3f(0.5f, -10.0f, -0.5f);
+        glTexCoord2f(1, 5); glVertex3f(0.5f, 20.0f, -0.5f);
+        glTexCoord2f(0, 5); glVertex3f(0.5f, 20.0f, 0.5f);
+        glEnd();
+
+        glDisable(GL_LIGHTING); glDisable(GL_TEXTURE_2D);
+        glColor3f(0.0f, 0.5f, 1.0f); glLineWidth(3.0f);
+        glBegin(GL_LINES);
+        glVertex3f(-0.51f, -10.0f, 0.51f); glVertex3f(-0.51f, 20.0f, 0.51f);
+        glVertex3f(0.51f, -10.0f, 0.51f); glVertex3f(0.51f, 20.0f, 0.51f);
+        glEnd();
+
+        glColor3f(0.2f, 0.2f, 0.2f);
+        glBegin(GL_QUADS);
+        glVertex3f(-0.6f, 20.0f, -0.6f); glVertex3f(0.6f, 20.0f, -0.6f);
+        glVertex3f(4.6f, 23.0f, 0.6f); glVertex3f(3.4f, 23.0f, -0.6f);
+        glEnd();
+        glColor3f(1.0f, 1.0f, 1.0f);
+        glBegin(GL_QUADS);
+        glVertex3f(0.6f, 19.9f, -0.5f); glVertex3f(0.6f, 19.9f, 0.5f);
+        glVertex3f(4.5f, 22.8f, 0.5f); glVertex3f(4.5f, 22.8f, -0.5f);
+        glEnd();
+        glEnable(GL_LIGHTING);
+
+    }
+    else {
+
+        glDisable(GL_LIGHTING);
+        glDisable(GL_TEXTURE_2D);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        //Umbra proiectata de soare
+        glColor4f(0.0f, 0.0f, 0.0f, 0.3f);
+        glBegin(GL_QUADS);
+        glVertex3f(-0.5f, -9.99f, 0.5f);
+        glVertex3f(0.5f, -9.99f, 0.5f);
+        glVertex3f(15.0f, -9.99f, 35.0f);
+        glVertex3f(14.0f, -9.99f, 35.0f);
+        glEnd();
+
+        // Umbre multiple soft
+        float shadows[3][4] = { {0.0f, 0.0f, 15.0f, 0.35f}, {6.0f, 4.0f, 12.0f, 0.2f}, {-5.0f, 8.0f, 10.0f, 0.15f} };
+        for (int s = 0; s < 3; s++) {
+            float offX = shadows[s][0], offZ = shadows[s][1], r = shadows[s][2], alpha = shadows[s][3];
+            glBegin(GL_TRIANGLE_FAN);
+            glColor4f(0.0f, 0.0f, 0.0f, alpha);
+            glVertex3f(offX, -9.98f, offZ);
+            for (int i = 0; i <= 40; i++) {
+                float angle = i * 2.0f * PI / 40.0f;
+                glColor4f(0.0f, 0.0f, 0.0f, 0.0f);
+                glVertex3f(offX + cos(angle) * r, -9.98f, offZ + sin(angle) * r);
+            }
+            glEnd();
+        }
+
+        glBegin(GL_TRIANGLE_FAN);
+        glColor4f(1.0f, 1.0f, 0.8f, 0.3f);
+        glVertex3f(4.0f, -9.97f, 0.0f);
+
+        for (int i = 0; i <= 30; i++) {
+            float angle = i * 2.0f * PI / 30.0f;
+            float radius = 10.0f; 
+            glColor4f(1.0f, 1.0f, 0.8f, 0.0f);
+            glVertex3f(4.0f + cos(angle) * radius, -9.97f, sin(angle) * radius);
+        }
+        glEnd();
+
+        DrawLightCone(4.0f, 22.8f, 0.0f, 0.0f);
+
+        glDisable(GL_BLEND);
+    }
+    glPopMatrix();
+}
+
+
+void DrawBench(float x, float z, float facingAngle) {
+    glPushMatrix();
+    glTranslatef(x, 0.0f, z); 
+    glRotatef(facingAngle, 0.0f, 1.0f, 0.0f); 
+    glColor3f(0.5f, 0.35f, 0.05f); 
+
+    // Sezut 
+    glPushMatrix();
+    glTranslatef(0.0f, -8.0f, 0.0f); 
+    glScalef(10.0f, 0.8f, 3.0f); 
+    glutSolidCube(1.0f);
+    glPopMatrix();
+
+    // Spatar
+    glPushMatrix();
+    glTranslatef(0.0f, -6.5f, -1.5f); 
+    glScalef(10.0f, 3.0f, 0.5f); 
+    glutSolidCube(1.0f);
+    glPopMatrix();
+
+    glColor3f(0.1f, 0.1f, 0.1f);
+    float legW = 0.3f, legH = 2.0f;
+    float lX = 4.5f, lZ = 1.2f;
+    float positions[4][2] = { {-lX, lZ}, {lX, lZ}, {-lX, -lZ}, {lX, -lZ} };
+    for (int i = 0; i < 4; i++) {
+        glPushMatrix();
+        glTranslatef(positions[i][0], -9.0f, positions[i][1]); // Baza picioarelor
+        glScalef(legW, legH, legW);
+        glutSolidCube(1.0f);
+        glPopMatrix();
+    }
+    glPopMatrix();
+}
+
+void DrawBenchShadow(float bX, float bZ, float lX, float lZ) {
+    float dx = bX - lX;
+    float dz = bZ - lZ;
+    float dist = sqrt(dx * dx + dz * dz);
+
+    if (dist < 18.0f) {
+        glDisable(GL_LIGHTING);
+        glDisable(GL_TEXTURE_2D);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        float maxAlpha = 0.75f * (1.0f - (dist / 18.0f));
+        if (maxAlpha < 0.0f) maxAlpha = 0.0f;
+
+        float dirX = dx / dist;
+        float dirZ = dz / dist;
+        float sLen = 5.0f; 
+
+        glBegin(GL_QUADS);
+
+        glColor4f(0.0f, 0.0f, 0.0f, maxAlpha);
+        glVertex3f(bX - 6.0f, -9.97f, bZ - 1.5f);
+        glVertex3f(bX + 6.0f, -9.97f, bZ - 1.5f);
+
+        //Varful umbrei
+        glColor4f(0.0f, 0.0f, 0.0f, maxAlpha * 0.4f);
+        glVertex3f(bX + dirX * sLen + 7.5f, -9.97f, bZ + dirZ * sLen + 2.0f);
+        glVertex3f(bX + dirX * sLen - 7.5f, -9.97f, bZ + dirZ * sLen + 2.0f);
+        glEnd();
+
+        glDisable(GL_BLEND);
+        glEnable(GL_LIGHTING);
+    }
 }
 
 void DrawEnvironment() {
+    // Reset?m seed-ul pentru consisten?? (cl?dirile ?i copacii r?mân fic?i)
     srand(42);
 
+    // Cladiri
     for (int i = 0; i < 30; i++) {
         float x, z;
         bool pozitieValida = false;
@@ -420,6 +684,7 @@ void DrawEnvironment() {
         if (pozitieValida) DrawBuilding(x, z, 40.0f + (rand() % 20), 80.0f + (rand() % 120), 40.0f + (rand() % 20));
     }
 
+    // Copaci
     for (int i = 0; i < 150; i++) {
         float tx = (float)(rand() % 1800 - 900);
         float tz = (float)(rand() % 1800 - 900);
@@ -430,11 +695,24 @@ void DrawEnvironment() {
         }
     }
 
+    float benchX = 29.5f;        //pentru a fi mai aproape de drum
+    float benchZ = 165.0f;       //pentru a muta banca in dreapta sau stanga
+    DrawBench(benchX, benchZ, -90.0f);
+
     for (float d = 160.0f; d < 800.0f; d += 100.0f) {
-        DrawLampPost(35.0f, d); 
-        DrawLampPost(-35.0f, -d); 
-        DrawLampPost(d, 35.0f);  
-        DrawLampPost(-d, -35.0f); 
+        DrawLampPost(35.0f, d, 180.0f, false);
+        DrawLampPost(-35.0f, -d, 0.0f, false);
+        DrawLampPost(d, 35.0f, 90.0f, false);
+        DrawLampPost(-d, -35.0f, 270.0f, false);
+    }
+
+    DrawBenchShadow(benchX, benchZ, 29.0f, 160.0f);
+
+    for (float d = 160.0f; d < 800.0f; d += 100.0f) {
+        DrawLampPost(35.0f, d, 180.0f, true);
+        DrawLampPost(-35.0f, -d, 0.0f, true);
+        DrawLampPost(d, 35.0f, 90.0f, true);
+        DrawLampPost(-d, -35.0f, 270.0f, true);
     }
 }
 
@@ -452,12 +730,16 @@ void display() {
     DrawSkybox();
 
     glTranslatef(-camX, -camY, -camZ);
+
+    // ADAUG? ACEASTA:
+    SetupLighting();
+
     DrawRelief();
     DrawCircuit();
-	DrawRoadMarkings();
-    DrawLake(300.0f, 300.0f, 80.0f); 
-	DrawLampPost(150.0f, 150.0f); 
-	DrawEnvironment();
+    DrawRoadMarkings();
+    DrawLake(300.0f, 300.0f, 80.0f);
+    DrawLampPost(150.0f, 150.0f, 100.0f, false);
+    DrawEnvironment();
 
     glutSwapBuffers();
 }
@@ -511,10 +793,12 @@ void init() {
     texGrass = LoadTexture("grass005.jpg", true);
     texStone = LoadTexture("rock_texture1.png", true);
     texRoad = LoadTexture("road_texture1.png", true);
-	texBuilding = LoadTexture("building.png", true);
-	texTree = LoadTexture("tree.png", true);
-	texLake = LoadTexture("lake.png", true);
-    // Adaugam ceata fina pentru a topi terenul în orizont
+    texBuilding = LoadTexture("building.png", true);
+    texTree = LoadTexture("tree.png", true);
+    texLake = LoadTexture("lake.png", true);
+    texShadow = LoadTexture("shadow1.png", false); 
+    texLamp = LoadTexture("road_texture.png", true); 
+
    /* glEnable(GL_FOG);
     GLfloat fogColor[] = { 0.7f, 0.8f, 0.9f, 1.0f };
     glFogfv(GL_FOG_COLOR, fogColor);
