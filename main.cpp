@@ -2,9 +2,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <vector> 
 
 #define SKYBOX_SIZE 1000.0f
 #define PI 3.14159265f
+
+struct BoundingBox {
+    float minX, maxX;
+    float minZ, maxZ;
+};
+
+std::vector<BoundingBox> buildingBoxes; 
+std::vector<BoundingBox> lampBoxes;
 
 // Definirea constantei pentru compatibilitate cu versiuni vechi de OpenGL
 #ifndef GL_CLAMP_TO_EDGE
@@ -12,16 +21,27 @@
 #endif
 
 // Variabile pentru texturi
-GLuint texFront, texBack, texLeft, texRight, texTop, texBottom, texGrass, texStone, texRoad, texBuilding, texTree, texLake, texShadow, texLamp;
+GLuint texFront, texBack, texLeft, texRight, texTop, texBottom, texGrass, texStone, texRoad, texBuilding, texTree, texLake, texShadow, texLamp, texCar;
 
 // Variabile pentru camera (Pozitie si Rotatie)
-float camX = 0.0f, camY = 3.0f, camZ = 50.0f;
+float camX = 0.0f, camY = 3.0f, camZ = 150.0f;
 float camAngleX = 0.0f;
 float camAngleY = 0.0f;
 
 // Variabile pentru mouse
 int lastX, lastY;
 bool mouseDown = false;
+
+// --- LOGICA VEHICUL ---
+bool isInCar = false;
+bool keys[256]; 
+
+float carX = 0.0f, carZ = 160.0f; 
+float carAngle = 0.0f, carSpeed = 0.0f;
+const float CAR_ACCEL = 0.04f, CAR_BRAKE = 0.08f, CAR_FRICTION = 0.015f, CAR_MAX_SPEED = 2.5f;
+
+float distCamera = 40.0f;    
+float inaltimeCamera = 12.0f; 
 
 /* ==================== INCARCARE TEXTURI ==================== */
 #define STB_IMAGE_IMPLEMENTATION
@@ -136,30 +156,32 @@ void DrawSkybox() {
     glEnd();
 }
 
+float getTerrainHeight(float x, float z) {
+    float dist = sqrt(x * x + z * z);
+    float h = (float)(cos(dist * 0.02f) * exp(-dist * 0.015f) * 30.0f);
+    return (dist > 180.0f) ? 0.0f : h;
+}
+
 void DrawRelief() {
     glEnable(GL_TEXTURE_2D);
     float d_densitate = 15.0f;
-
-    auto getH = [](float x, float z) {
-        float dist = sqrt(x * x + z * z);
-
-        float h = (float)(cos(dist * 0.02f) * exp(-dist * 0.015f) * 30.0f);
-
-        return (dist > 180.0f) ? 0.0f : h;
-        };
 
     glBindTexture(GL_TEXTURE_2D, texGrass);
     glBegin(GL_QUADS);
     for (float x = -1000.0f; x < 1000.0f; x += 10.0f) {
         for (float z = -1000.0f; z < 1000.0f; z += 10.0f) {
-            float h = getH(x, z);
+            float h = getTerrainHeight(x, z);
             float dist = sqrt(x * x + z * z);
 
             if (h <= 2.5f || dist > 110.0f) {
-                glTexCoord2f(x / d_densitate, z / d_densitate); glVertex3f(x, h - 10.0f, z);
-                glTexCoord2f((x + 10) / d_densitate, z / d_densitate); glVertex3f(x + 10, getH(x + 10, z) - 10.0f, z);
-                glTexCoord2f((x + 10) / d_densitate, (z + 10) / d_densitate); glVertex3f(x + 10, getH(x + 10, z + 10) - 10.0f, z + 10);
-                glTexCoord2f(x / d_densitate, (z + 10) / d_densitate); glVertex3f(x, getH(x, z + 10) - 10.0f, z + 10);
+                glTexCoord2f(x / d_densitate, z / d_densitate);
+                glVertex3f(x, h - 10.0f, z);
+                glTexCoord2f((x + 10) / d_densitate, z / d_densitate);
+                glVertex3f(x + 10, getTerrainHeight(x + 10, z) - 10.0f, z);
+                glTexCoord2f((x + 10) / d_densitate, (z + 10) / d_densitate);
+                glVertex3f(x + 10, getTerrainHeight(x + 10, z + 10) - 10.0f, z + 10);
+                glTexCoord2f(x / d_densitate, (z + 10) / d_densitate);
+                glVertex3f(x, getTerrainHeight(x, z + 10) - 10.0f, z + 10);
             }
 
             float distLac = sqrt(pow(x - 300.0f, 2) + pow(z - 300.0f, 2));
@@ -172,14 +194,18 @@ void DrawRelief() {
     glBegin(GL_QUADS);
     for (float x = -400.0f; x < 400.0f; x += 10.0f) {
         for (float z = -400.0f; z < 400.0f; z += 10.0f) {
-            float h = getH(x, z);
+            float h = getTerrainHeight(x, z);
             float dist = sqrt(x * x + z * z);
 
             if (h > 2.5f && dist <= 110.0f) {
-                glTexCoord2f(x / d_densitate, z / d_densitate); glVertex3f(x, h - 10.0f, z);
-                glTexCoord2f((x + 10) / d_densitate, z / d_densitate); glVertex3f(x + 10, getH(x + 10, z) - 10.0f, z);
-                glTexCoord2f((x + 10) / d_densitate, (z + 10) / d_densitate); glVertex3f(x + 10, getH(x + 10, z + 10) - 10.0f, z + 10);
-                glTexCoord2f(x / d_densitate, (z + 10) / d_densitate); glVertex3f(x, getH(x, z + 10) - 10.0f, z + 10);
+                glTexCoord2f(x / d_densitate, z / d_densitate);
+                glVertex3f(x, h - 10.0f, z);
+                glTexCoord2f((x + 10) / d_densitate, z / d_densitate);
+                glVertex3f(x + 10, getTerrainHeight(x + 10, z) - 10.0f, z);
+                glTexCoord2f((x + 10) / d_densitate, (z + 10) / d_densitate);
+                glVertex3f(x + 10, getTerrainHeight(x + 10, z + 10) - 10.0f, z + 10);
+                glTexCoord2f(x / d_densitate, (z + 10) / d_densitate);
+                glVertex3f(x, getTerrainHeight(x, z + 10) - 10.0f, z + 10);
             }
         }
     }
@@ -276,7 +302,17 @@ void DrawRoadMarkings() {
     glColor3f(1.0f, 1.0f, 1.0f);
 }
 
-void DrawBuilding(float x, float z, float w, float h, float d) {
+void DrawBuilding(float x, float z, float w, float h, float d, bool saveBox) {
+
+
+    if (saveBox) {
+        BoundingBox box;
+        box.minX = x - w / 2.0f;
+        box.maxX = x + w / 2.0f;
+        box.minZ = z - d / 2.0f;
+        box.maxZ = z + d / 2.0f;
+        buildingBoxes.push_back(box);
+    }
 
     glDisable(GL_LIGHTING); glDisable(GL_TEXTURE_2D);
     glEnable(GL_BLEND); glColor4f(0.0f, 0.0f, 0.0f, 0.4f);
@@ -337,7 +373,7 @@ void DrawBuilding(float x, float z, float w, float h, float d) {
 
     //Pentru a reda umbre pentru cladiri
     glDisable(GL_TEXTURE_2D);
-    glColor4f(0.0f, 0.0f, 0.0f, 0.3f); 
+    glColor4f(0.0f, 0.0f, 0.0f, 0.3f);
     glVertex3f(x - w / 1.8, -9.95f, z + d / 1.8);
     glVertex3f(x + w / 1.8, -9.95f, z + d / 1.8);
     glVertex3f(x + w / 1.8, -9.95f, z - d / 1.8);
@@ -407,7 +443,7 @@ void DrawLightCone(float x, float y, float z, float rotY) {
     glVertex3f(0, 0, 0);
 
 
-    for (int i = 0; i <= 30; i++) { 
+    for (int i = 0; i <= 30; i++) {
         float angle = i * 2.0f * PI / 30.0f;
         glColor4f(1.0f, 1.0f, 0.7f, 0.0f);
         glVertex3f(cos(angle) * 10.0f, -30.0f, sin(angle) * 10.0f);
@@ -434,7 +470,7 @@ void DrawSoftLight(float x, float y, float z, float r) {
     glColor4f(1.0f, 1.0f, 0.7f, 0.4f);
 
     glBegin(GL_QUADS);
-    glNormal3f(0.0f, 1.0f, 0.0f); 
+    glNormal3f(0.0f, 1.0f, 0.0f);
     glTexCoord2f(0, 0); glVertex3f(-r, -9.98f, -r);
     glTexCoord2f(1, 0); glVertex3f(r, -9.98f, -r);
     glTexCoord2f(1, 1); glVertex3f(r, -9.98f, r);
@@ -454,7 +490,7 @@ void DrawGroundProjection(float x, float y, float z) {
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDisable(GL_TEXTURE_2D); 
+    glDisable(GL_TEXTURE_2D);
 
     glBegin(GL_TRIANGLE_FAN);
 
@@ -482,6 +518,16 @@ void DrawGroundProjection(float x, float y, float z) {
 
 
 void DrawLampPost(float x, float z, float facingAngle, bool transparentPass) {
+
+    if (!transparentPass) {
+        BoundingBox box;
+        box.minX = x - 1.5f;
+        box.maxX = x + 1.5f;
+        box.minZ = z - 1.5f;
+        box.maxZ = z + 1.5f;
+        lampBoxes.push_back(box);
+    }
+
     glPushMatrix();
     glTranslatef(x, 0.0f, z);
     glRotatef(facingAngle, 0.0f, 1.0f, 0.0f);
@@ -577,7 +623,7 @@ void DrawLampPost(float x, float z, float facingAngle, bool transparentPass) {
 
         for (int i = 0; i <= 30; i++) {
             float angle = i * 2.0f * PI / 30.0f;
-            float radius = 10.0f; 
+            float radius = 10.0f;
             glColor4f(1.0f, 1.0f, 0.8f, 0.0f);
             glVertex3f(4.0f + cos(angle) * radius, -9.97f, sin(angle) * radius);
         }
@@ -593,21 +639,21 @@ void DrawLampPost(float x, float z, float facingAngle, bool transparentPass) {
 
 void DrawBench(float x, float z, float facingAngle) {
     glPushMatrix();
-    glTranslatef(x, 0.0f, z); 
-    glRotatef(facingAngle, 0.0f, 1.0f, 0.0f); 
-    glColor3f(0.5f, 0.35f, 0.05f); 
+    glTranslatef(x, 0.0f, z);
+    glRotatef(facingAngle, 0.0f, 1.0f, 0.0f);
+    glColor3f(0.5f, 0.35f, 0.05f);
 
     // Sezut 
     glPushMatrix();
-    glTranslatef(0.0f, -8.0f, 0.0f); 
-    glScalef(10.0f, 0.8f, 3.0f); 
+    glTranslatef(0.0f, -8.0f, 0.0f);
+    glScalef(10.0f, 0.8f, 3.0f);
     glutSolidCube(1.0f);
     glPopMatrix();
 
     // Spatar
     glPushMatrix();
-    glTranslatef(0.0f, -6.5f, -1.5f); 
-    glScalef(10.0f, 3.0f, 0.5f); 
+    glTranslatef(0.0f, -6.5f, -1.5f);
+    glScalef(10.0f, 3.0f, 0.5f);
     glutSolidCube(1.0f);
     glPopMatrix();
 
@@ -641,7 +687,7 @@ void DrawBenchShadow(float bX, float bZ, float lX, float lZ) {
 
         float dirX = dx / dist;
         float dirZ = dz / dist;
-        float sLen = 5.0f; 
+        float sLen = 5.0f;
 
         glBegin(GL_QUADS);
 
@@ -661,14 +707,16 @@ void DrawBenchShadow(float bX, float bZ, float lX, float lZ) {
 }
 
 void DrawEnvironment() {
-    // Reset?m seed-ul pentru consisten?? (cl?dirile ?i copacii r?mân fic?i)
     srand(42);
 
-    // Cladiri
+    buildingBoxes.clear();
+    lampBoxes.clear(); 
+
     for (int i = 0; i < 30; i++) {
         float x, z;
         bool pozitieValida = false;
         int incercari = 0;
+
         while (!pozitieValida && incercari < 100) {
             x = (float)(rand() % 1600 - 800);
             z = (float)(rand() % 1600 - 800);
@@ -681,10 +729,17 @@ void DrawEnvironment() {
             if (fabsf(z) < 45.0f && fabsf(x) > 130.0f) pozitieValida = false;
             if (sqrt(pow(x - 300, 2) + pow(z - 300, 2)) < 110.0f) pozitieValida = false;
         }
-        if (pozitieValida) DrawBuilding(x, z, 40.0f + (rand() % 20), 80.0f + (rand() % 120), 40.0f + (rand() % 20));
+
+        if (pozitieValida) {
+
+            float w = 40.0f + (rand() % 20);
+            float h = 80.0f + (rand() % 120);
+            float d = 40.0f + (rand() % 20);
+
+            DrawBuilding(x, z, w, h, d, true);
+        }
     }
 
-    // Copaci
     for (int i = 0; i < 150; i++) {
         float tx = (float)(rand() % 1800 - 900);
         float tz = (float)(rand() % 1800 - 900);
@@ -695,9 +750,10 @@ void DrawEnvironment() {
         }
     }
 
-    float benchX = 29.5f;        //pentru a fi mai aproape de drum
-    float benchZ = 165.0f;       //pentru a muta banca in dreapta sau stanga
+    float benchX = 29.5f;
+    float benchZ = 165.0f;
     DrawBench(benchX, benchZ, -90.0f);
+    DrawBenchShadow(benchX, benchZ, 29.0f, 160.0f);
 
     for (float d = 160.0f; d < 800.0f; d += 100.0f) {
         DrawLampPost(35.0f, d, 180.0f, false);
@@ -705,8 +761,6 @@ void DrawEnvironment() {
         DrawLampPost(d, 35.0f, 90.0f, false);
         DrawLampPost(-d, -35.0f, 270.0f, false);
     }
-
-    DrawBenchShadow(benchX, benchZ, 29.0f, 160.0f);
 
     for (float d = 160.0f; d < 800.0f; d += 100.0f) {
         DrawLampPost(35.0f, d, 180.0f, true);
@@ -716,7 +770,225 @@ void DrawEnvironment() {
     }
 }
 
+void DrawWheel(float x, float y, float z) {
+    glPushMatrix();
+    glTranslatef(x, y, z);
 
+    glRotatef(90.0f, 0.0f, 1.0f, 0.0f);
+
+    glDisable(GL_TEXTURE_2D);
+    glColor3f(0.1f, 0.1f, 0.1f); // Negru pentru cauciuc
+
+    // glutSolidTorus(raza_tub, raza_totala, segmente_tub, segmente_roata)
+    glutSolidTorus(0.4, 0.8, 15, 15);
+
+    glEnable(GL_TEXTURE_2D);
+    glPopMatrix();
+}
+
+void DrawCar() {
+    glPushMatrix();
+
+    glTranslatef(carX, -8.5f, carZ);
+    glRotatef(carAngle, 0.0f, 1.0f, 0.0f);
+
+    glScalef(1.4f, 1.2f, 1.1f);
+
+    GLfloat mat_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    GLfloat mat_shininess[] = { 128.0f }; 
+    glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
+    glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);
+
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
+
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, texCar);
+    glColor3f(0.7f, 0.7f, 0.75f); 
+
+    glBegin(GL_QUADS);
+    // LATERALA STANGA
+    glNormal3f(-1.0f, 0.0f, 0.0f);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-2.5f, 0.0f, 5.0f);   
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-1.5f, 0.0f, -5.0f);  
+    glTexCoord2f(1.0f, 0.5f); glVertex3f(-1.5f, 1.8f, -5.0f);  
+    glTexCoord2f(0.0f, 0.5f); glVertex3f(-2.5f, 2.0f, 5.0f);   
+
+    // LATERALA DREAPTA
+    glNormal3f(1.0f, 0.0f, 0.0f);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(1.5f, 0.0f, -5.0f);   
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(2.5f, 0.0f, 5.0f);    
+    glTexCoord2f(1.0f, 0.5f); glVertex3f(2.5f, 2.0f, 5.0f);    
+    glTexCoord2f(0.0f, 0.5f); glVertex3f(1.5f, 1.8f, -5.0f);   
+
+    // FATA MASINII
+    glNormal3f(0.0f, 0.0f, -1.0f);
+    glTexCoord2f(0.0f, 0.5f); glVertex3f(-1.5f, 0.0f, -5.0f);
+    glTexCoord2f(1.0f, 0.5f); glVertex3f(1.5f, 0.0f, -5.0f);
+    glTexCoord2f(1.0f, 0.6f); glVertex3f(1.5f, 1.8f, -5.0f);
+    glTexCoord2f(0.0f, 0.6f); glVertex3f(-1.5f, 1.8f, -5.0f);
+
+    // SPATELE (Oblon)
+    glNormal3f(0.0f, 0.0f, 1.0f);
+    glTexCoord2f(0.0f, 0.5f); glVertex3f(2.5f, 0.0f, 5.0f);
+    glTexCoord2f(1.0f, 0.5f); glVertex3f(-2.5f, 0.0f, 5.0f);
+    glTexCoord2f(1.0f, 0.6f); glVertex3f(-2.5f, 2.0f, 5.0f);
+    glTexCoord2f(0.0f, 0.6f); glVertex3f(2.5f, 2.0f, 5.0f);
+    glEnd();
+
+    glDisable(GL_TEXTURE_2D);
+    glColor3f(0.05f, 0.05f, 0.05f); // Geamuri fumurii
+
+    glBegin(GL_QUADS);
+    // PARBRIZ 
+    glNormal3f(0.0f, 0.7f, -0.7f);
+    glVertex3f(-1.5f, 1.8f, -5.0f);
+    glVertex3f(1.5f, 1.8f, -5.0f);
+    glVertex3f(1.2f, 4.5f, -0.5f);  // Start Plafon
+    glVertex3f(-1.2f, 4.5f, -0.5f);
+
+    // PLAFON 
+    glNormal3f(0.0f, 1.0f, 0.0f);
+    glVertex3f(-1.2f, 4.5f, -0.5f);
+    glVertex3f(1.2f, 4.5f, -0.5f);
+    glVertex3f(1.2f, 4.5f, 1.5f);   // Sfarsit Plafon
+    glVertex3f(-1.2f, 4.5f, 1.5f);
+
+    // LUNETA 
+    glNormal3f(0.0f, 0.7f, 0.7f);
+    glVertex3f(-1.2f, 4.5f, 1.5f);
+    glVertex3f(1.2f, 4.5f, 1.5f);
+    glVertex3f(2.0f, 2.0f, 5.0f);
+    glVertex3f(-2.0f, 2.0f, 5.0f);
+
+    // GEAMURI LATERALE
+    // Stanga
+    glNormal3f(-1.0f, 0.0f, 0.0f);
+    glVertex3f(-1.5f, 1.8f, -5.0f);
+    glVertex3f(-2.5f, 2.0f, 5.0f);
+    glVertex3f(-1.2f, 4.5f, 1.5f);
+    glVertex3f(-1.2f, 4.5f, -0.5f);
+
+    // Dreapta
+    glNormal3f(1.0f, 0.0f, 0.0f);
+    glVertex3f(1.5f, 1.8f, -5.0f);
+    glVertex3f(2.5f, 2.0f, 5.0f);
+    glVertex3f(1.2f, 4.5f, 1.5f);
+    glVertex3f(1.2f, 4.5f, -0.5f);
+    glEnd();
+
+    glDisable(GL_LIGHTING); 
+
+    glColor3f(1.0f, 1.0f, 0.8f);
+    glPushMatrix();
+    glTranslatef(0.0f, 1.75f, -5.05f);
+    glScalef(3.0f, 0.08f, 0.1f);
+    glutSolidCube(1.0f);
+    glPopMatrix();
+
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glPushMatrix();
+    glTranslatef(0.0f, 1.85f, 5.05f);
+    glScalef(4.2f, 0.12f, 0.1f);
+    glutSolidCube(1.0f);
+    glPopMatrix();
+
+    glEnable(GL_LIGHTING);
+
+    DrawWheel(2.2f, -0.7f, -3.0f);  // Fata Dreapta
+    DrawWheel(-2.2f, -0.7f, -3.0f); // Fata Stanga
+    DrawWheel(2.2f, -0.7f, 3.0f);   // Spate Dreapta
+    DrawWheel(-2.2f, -0.7f, 3.0f);  // Spate Stanga
+
+    glDisable(GL_COLOR_MATERIAL);
+    glPopMatrix();
+}
+
+
+bool checkCarCollision(float nextX, float nextZ) {
+    float carW = 3.5f;
+    float carL = 5.5f;
+
+    BoundingBox carBox;
+    carBox.minX = nextX - carW;
+    carBox.maxX = nextX + carW;
+    carBox.minZ = nextZ - carL;
+    carBox.maxZ = nextZ + carL;
+
+    // Coliziune cu cladiri
+    for (const auto& building : buildingBoxes) {
+        if (carBox.minX < building.maxX && carBox.maxX > building.minX &&
+            carBox.minZ < building.maxZ && carBox.maxZ > building.minZ) {
+            return true;
+        }
+    }
+
+    // Coliziune cu stalpi
+    for (const auto& lamp : lampBoxes) {
+        if (carBox.minX < lamp.maxX && carBox.maxX > lamp.minX &&
+            carBox.minZ < lamp.maxZ && carBox.maxZ > lamp.minZ) {
+            return true;
+        }
+    }
+
+    // Coliziune cu muntele
+    float terrainH = getTerrainHeight(nextX, nextZ);
+    if (terrainH > 2.5f) {
+        return true;
+    }
+
+    return false;
+}
+
+void update(int value) {
+    if (isInCar) {
+
+        if (keys['w'] || keys['W']) {
+            carSpeed += 0.05f;
+            if (carSpeed > 5.0f) carSpeed = 5.0f;
+        }
+        else if (keys['s'] || keys['S']) {
+            carSpeed -= 0.05f;
+            if (carSpeed < -1.0f) carSpeed = -1.0f;
+        }
+        else {
+            carSpeed *= 0.95f; 
+        }
+
+        if (fabs(carSpeed) > 0.1f) {
+            if (keys['a'] || keys['A']) carAngle += 2.0f;
+            if (keys['d'] || keys['D']) carAngle -= 2.0f;
+        }
+
+        float rad = carAngle * PI / 180.0f;
+
+        float nextX = carX - sin(rad) * carSpeed;
+        float nextZ = carZ - cos(rad) * carSpeed;
+
+        if (!checkCarCollision(nextX, nextZ)) {
+
+            carX = nextX;
+            carZ = nextZ;
+        }
+        else {
+            carSpeed = -carSpeed * 0.6f;
+
+            carX += sin(rad) * 1.5f;
+            carZ += cos(rad) * 1.5f;
+        }
+
+        float camDist = 55.0f; 
+        camX = carX + sin(rad) * camDist;
+        camZ = carZ + cos(rad) * camDist;
+        camY = -10.0f + 15.0f;
+
+        camAngleY = -carAngle;
+        camAngleX = 15.0f;
+    }
+
+    glutPostRedisplay();
+    glutTimerFunc(16, update, 0);
+}
 
 /* ==================== DISPLAY & LOGIC ==================== */
 
@@ -731,7 +1003,6 @@ void display() {
 
     glTranslatef(-camX, -camY, -camZ);
 
-    // ADAUG? ACEASTA:
     SetupLighting();
 
     DrawRelief();
@@ -740,28 +1011,46 @@ void display() {
     DrawLake(300.0f, 300.0f, 80.0f);
     DrawLampPost(150.0f, 150.0f, 100.0f, false);
     DrawEnvironment();
-
+    DrawCar();
     glutSwapBuffers();
 }
 
 /* ==================== INPUT HANDLERS ==================== */
 
 void keyboard(unsigned char key, int x, int y) {
-    float speed = 3.0f;
-    float rad = camAngleY * PI / 180.0f;
+    keys[key] = true; 
+
     switch (key) {
-    case 'w': case 'W': camX += sin(rad) * speed; camZ -= cos(rad) * speed; break;
-    case 's': case 'S': camX -= sin(rad) * speed; camZ += cos(rad) * speed; break;
-    case 'a': case 'A': camX -= cos(rad) * speed; camZ -= sin(rad) * speed; break;
-    case 'd': case 'D': camX += cos(rad) * speed; camZ += sin(rad) * speed; break;
-
-
-    case 'r': case 'R': camY += speed; break; // Up
-    case 'f': case 'F': camY -= speed; break; // Down
-    case 27: exit(0); break;
+    case 'e': case 'E':
+        isInCar = !isInCar;
+        if (!isInCar) camY = 3.0f; 
+        break;
+    case 27: // ESC
+        if (isInCar) isInCar = false;
+        else exit(0);
+        break;
     }
+
+    if (!isInCar) {
+        float speed = 3.0f;
+        float rad = camAngleY * PI / 180.0f;
+        switch (key) {
+        case 'w': case 'W': camX += sin(rad) * speed; camZ -= cos(rad) * speed; break;
+        case 's': case 'S': camX -= sin(rad) * speed; camZ += cos(rad) * speed; break;
+        case 'a': case 'A': camX -= cos(rad) * speed; camZ -= sin(rad) * speed; break;
+        case 'd': case 'D': camX += cos(rad) * speed; camZ += sin(rad) * speed; break;
+        case 'r': case 'R': camY += speed; break;
+        case 'f': case 'F': camY -= speed; break;
+        }
+    }
+
     glutPostRedisplay();
 }
+
+void keyboardUp(unsigned char key, int x, int y) {
+    keys[key] = false; 
+}
+
 
 void mouse(int button, int state, int x, int y) {
     if (button == GLUT_LEFT_BUTTON) {
@@ -796,14 +1085,15 @@ void init() {
     texBuilding = LoadTexture("building.png", true);
     texTree = LoadTexture("tree.png", true);
     texLake = LoadTexture("lake.png", true);
-    texShadow = LoadTexture("shadow1.png", false); 
-    texLamp = LoadTexture("road_texture.png", true); 
+    texShadow = LoadTexture("shadow1.png", false);
+    texLamp = LoadTexture("road_texture.png", true);
+    //texCar = LoadTexture("car_tex.png", true);
 
-   /* glEnable(GL_FOG);
-    GLfloat fogColor[] = { 0.7f, 0.8f, 0.9f, 1.0f };
-    glFogfv(GL_FOG_COLOR, fogColor);
-    glFogf(GL_FOG_DENSITY, 0.0015f);
-    glFogf(GL_FOG_MODE, GL_EXP); */
+    /* glEnable(GL_FOG);
+     GLfloat fogColor[] = { 0.7f, 0.8f, 0.9f, 1.0f };
+     glFogfv(GL_FOG_COLOR, fogColor);
+     glFogf(GL_FOG_DENSITY, 0.0015f);
+     glFogf(GL_FOG_MODE, GL_EXP); */
 
 }
 
@@ -825,6 +1115,8 @@ int main(int argc, char** argv) {
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
     glutKeyboardFunc(keyboard);
+    glutKeyboardUpFunc(keyboardUp); 
+    glutTimerFunc(0, update, 0);    
     glutMouseFunc(mouse);
     glutMotionFunc(motion);
     glutMainLoop();
