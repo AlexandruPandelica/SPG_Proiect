@@ -12,8 +12,61 @@ struct BoundingBox {
     float minZ, maxZ;
 };
 
-std::vector<BoundingBox> buildingBoxes; 
+std::vector<BoundingBox> buildingBoxes;
 std::vector<BoundingBox> lampBoxes;
+
+// ==================== AVION/ELICOPTER  ====================
+enum AirplaneState {
+    AP_PARCAT,
+    AP_DECOLARE,
+    AP_ZBOR,
+    AP_ATERIZARE
+};
+
+struct Airplane {
+    float x, y, z;
+    float angle;
+    float pitch;
+    float speed;
+    float timer;
+    float bankAngle;
+    float targetAngle;
+    AirplaneState state;
+    float stateTimer;   
+};
+
+struct Helicopter {
+    float x, y, z;
+    float angle;
+    float targetAngle;
+    float speed;
+    float timer;
+    float bankAngle;
+    float rotorAngle;    
+    float tailRotorAngle; 
+    float bobY;          
+};
+
+Helicopter helicopter = { 100.0f, 60.0f, 100.0f, 0.0f, 0.0f, 1.8f, 0.0f, 0.0f, 0.0f, 0.0f };
+
+
+const float RUNWAY_X = 400.0f;   
+const float RUNWAY_Z = 200.0f;   
+const float RUNWAY_ANGLE = 0.0f; 
+
+Airplane airplane = { 400.0f, -9.0f, 200.0f, 0.0f, 0.0f, 2.5f, 0.0f, 0.0f };
+
+
+// ==================== MASINI GIRATORIU ====================
+struct CircularCar {
+    float angle;
+    float speed;
+    float radius;
+    int colorIdx;
+};
+CircularCar circCars[3];
+
+bool objectsInitialized = false;
 
 // Definirea constantei pentru compatibilitate cu versiuni vechi de OpenGL
 #ifndef GL_CLAMP_TO_EDGE
@@ -34,14 +87,14 @@ bool mouseDown = false;
 
 // --- LOGICA VEHICUL ---
 bool isInCar = false;
-bool keys[256]; 
+bool keys[256];
 
-float carX = 0.0f, carZ = 160.0f; 
+float carX = 0.0f, carZ = 160.0f;
 float carAngle = 0.0f, carSpeed = 0.0f;
 const float CAR_ACCEL = 0.04f, CAR_BRAKE = 0.08f, CAR_FRICTION = 0.015f, CAR_MAX_SPEED = 2.5f;
 
-float distCamera = 40.0f;    
-float inaltimeCamera = 12.0f; 
+float distCamera = 40.0f;
+float inaltimeCamera = 12.0f;
 
 /* ==================== INCARCARE TEXTURI ==================== */
 #define STB_IMAGE_IMPLEMENTATION
@@ -210,6 +263,93 @@ void DrawRelief() {
         }
     }
     glEnd();
+}
+
+void DrawRunway() {
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, texRoad);
+    glColor3f(0.6f, 0.6f, 0.6f);
+
+    glPushMatrix();
+    glTranslatef(RUNWAY_X, -9.9f, RUNWAY_Z);
+    glRotatef(RUNWAY_ANGLE, 0.0f, 1.0f, 0.0f);
+
+    float lungime = 200.0f;
+    float latime = 20.0f;
+    glBegin(GL_QUADS);
+    glTexCoord2f(0, 0); glVertex3f(-latime / 2, 0, -lungime / 2);
+    glTexCoord2f(1, 0); glVertex3f(latime / 2, 0, -lungime / 2);
+    glTexCoord2f(1, 8); glVertex3f(latime / 2, 0, lungime / 2);
+    glTexCoord2f(0, 8); glVertex3f(-latime / 2, 0, lungime / 2);
+    glEnd();
+
+    // Marcaje centrale
+    glDisable(GL_TEXTURE_2D);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    for (float lz = -lungime / 2 + 10.0f; lz < lungime / 2 - 10.0f; lz += 20.0f) {
+        glBegin(GL_QUADS);
+        glVertex3f(-0.8f, 0.01f, lz);
+        glVertex3f(0.8f, 0.01f, lz);
+        glVertex3f(0.8f, 0.01f, lz + 10.0f);
+        glVertex3f(-0.8f, 0.01f, lz + 10.0f);
+        glEnd();
+    }
+
+    // Marcaj START 
+    glColor3f(1.0f, 1.0f, 1.0f);
+    for (float lx = -latime / 2 + 1.0f; lx < latime / 2; lx += 3.5f) {
+        glBegin(GL_QUADS);
+        glVertex3f(lx, 0.01f, -lungime / 2);
+        glVertex3f(lx + 2.0f, 0.01f, -lungime / 2);
+        glVertex3f(lx + 2.0f, 0.01f, -lungime / 2 + 12.0f);
+        glVertex3f(lx, 0.01f, -lungime / 2 + 12.0f);
+        glEnd();
+    }
+
+    // Marcaj STOP
+    for (float lx = -latime / 2 + 1.0f; lx < latime / 2; lx += 3.5f) {
+        glBegin(GL_QUADS);
+        glVertex3f(lx, 0.01f, lungime / 2 - 12.0f);
+        glVertex3f(lx + 2.0f, 0.01f, lungime / 2 - 12.0f);
+        glVertex3f(lx + 2.0f, 0.01f, lungime / 2);
+        glVertex3f(lx, 0.01f, lungime / 2);
+        glEnd();
+    }
+
+    // Lumini 
+    glDisable(GL_LIGHTING);
+    for (float lz = -lungime / 2; lz <= lungime / 2; lz += 20.0f) {
+        // Stanga - rosu
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glPushMatrix();
+        glTranslatef(-latime / 2 - 1.0f, 0.3f, lz);
+        glutSolidSphere(0.4f, 6, 6);
+        glPopMatrix();
+
+        // Dreapta - verde
+        glColor3f(0.0f, 1.0f, 0.0f);
+        glPushMatrix();
+        glTranslatef(latime / 2 + 1.0f, 0.3f, lz);
+        glutSolidSphere(0.4f, 6, 6);
+        glPopMatrix();
+    }
+
+    // Lumini de capat (albe - threshold lights)
+    glColor3f(1.0f, 1.0f, 0.8f);
+    for (float lx = -latime / 2; lx <= latime / 2; lx += 4.0f) {
+        glPushMatrix();
+        glTranslatef(lx, 0.3f, -lungime / 2);
+        glutSolidSphere(0.5f, 6, 6);
+        glPopMatrix();
+
+        glPushMatrix();
+        glTranslatef(lx, 0.3f, lungime / 2);
+        glutSolidSphere(0.5f, 6, 6);
+        glPopMatrix();
+    }
+    glEnable(GL_LIGHTING);
+    glEnable(GL_TEXTURE_2D);
+    glPopMatrix();
 }
 
 
@@ -663,7 +803,7 @@ void DrawBench(float x, float z, float facingAngle) {
     float positions[4][2] = { {-lX, lZ}, {lX, lZ}, {-lX, -lZ}, {lX, -lZ} };
     for (int i = 0; i < 4; i++) {
         glPushMatrix();
-        glTranslatef(positions[i][0], -9.0f, positions[i][1]); // Baza picioarelor
+        glTranslatef(positions[i][0], -9.0f, positions[i][1]); 
         glScalef(legW, legH, legW);
         glutSolidCube(1.0f);
         glPopMatrix();
@@ -710,7 +850,7 @@ void DrawEnvironment() {
     srand(42);
 
     buildingBoxes.clear();
-    lampBoxes.clear(); 
+    lampBoxes.clear();
 
     for (int i = 0; i < 30; i++) {
         float x, z;
@@ -728,6 +868,8 @@ void DrawEnvironment() {
             if (fabsf(x) < 45.0f && fabsf(z) > 130.0f) pozitieValida = false;
             if (fabsf(z) < 45.0f && fabsf(x) > 130.0f) pozitieValida = false;
             if (sqrt(pow(x - 300, 2) + pow(z - 300, 2)) < 110.0f) pozitieValida = false;
+            if (fabsf(x - 400.0f) < 80.0f && fabsf(z - 200.0f) < 150.0f)
+                pozitieValida = false;
         }
 
         if (pozitieValida) {
@@ -770,6 +912,37 @@ void DrawEnvironment() {
     }
 }
 
+
+void InitMovingObjects() {
+    // --- AVION ---
+    airplane.x = 400.0f;
+    airplane.y = -9.0f;
+    airplane.z = 200.0f;
+    airplane.angle = 0.0f;
+    airplane.targetAngle = 0.0f;
+    airplane.state = AP_PARCAT;
+    airplane.stateTimer = 3.0f;
+
+    // --- MASINI GIRATORIU ---
+
+    circCars[0].angle = 0.0f;
+    circCars[0].speed = 1.2f;
+    circCars[0].radius = 135.0f;
+    circCars[0].colorIdx = 0;   // Rosu
+
+    circCars[1].angle = 180.0f;
+    circCars[1].speed = 0.9f;
+    circCars[1].radius = 135.0f;
+    circCars[1].colorIdx = 2;   // Albastru
+
+	circCars[2].angle = 0.0f;
+	circCars[2].speed = 1.0f;
+	circCars[2].radius = 135.0f;
+	circCars[2].colorIdx = 3;   // Verde
+}
+
+
+
 void DrawWheel(float x, float y, float z) {
     glPushMatrix();
     glTranslatef(x, y, z);
@@ -777,12 +950,398 @@ void DrawWheel(float x, float y, float z) {
     glRotatef(90.0f, 0.0f, 1.0f, 0.0f);
 
     glDisable(GL_TEXTURE_2D);
-    glColor3f(0.1f, 0.1f, 0.1f); // Negru pentru cauciuc
+    glColor3f(0.1f, 0.1f, 0.1f);
 
     // glutSolidTorus(raza_tub, raza_totala, segmente_tub, segmente_roata)
     glutSolidTorus(0.4, 0.8, 15, 15);
 
     glEnable(GL_TEXTURE_2D);
+    glPopMatrix();
+}
+
+void DrawHelicopter(float x, float y, float z, float angle, float bankAngle, float rotorAngle, float tailRotorAngle) {
+    glPushMatrix();
+    glTranslatef(x, y, z);
+    glRotatef(-angle, 0.0f, 1.0f, 0.0f);
+    glRotatef(bankAngle, 0.0f, 0.0f, 1.0f);
+
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_LIGHTING);
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
+
+    GLfloat ambientBoost[] = { 0.5f, 0.5f, 0.5f, 1.0f };
+    glLightfv(GL_LIGHT0, GL_AMBIENT, ambientBoost);
+
+    glColor3f(0.2f, 0.5f, 0.2f); // Verde militar
+    glPushMatrix();
+    glScalef(1.8f, 1.2f, 3.5f);
+    glutSolidSphere(2.0f, 12, 8);
+    glPopMatrix();
+
+    glColor3f(0.15f, 0.4f, 0.15f);
+    glPushMatrix();
+    glTranslatef(0.0f, 0.0f, -5.5f);
+    glScalef(1.2f, 1.0f, 1.5f);
+    glutSolidSphere(1.5f, 10, 6);
+    glPopMatrix();
+
+    glColor3f(0.4f, 0.7f, 0.9f);
+    glPushMatrix();
+    glTranslatef(0.0f, 0.8f, -4.5f);
+    glScalef(1.4f, 1.0f, 1.8f);
+    glutSolidSphere(1.2f, 10, 6);
+    glPopMatrix();
+
+    glColor3f(0.2f, 0.5f, 0.2f);
+    glBegin(GL_QUADS);
+    glNormal3f(0, 1, 0);
+
+    glVertex3f(-0.6f, 0.0f, 5.0f);
+    glVertex3f(0.6f, 0.0f, 5.0f);
+    glVertex3f(0.4f, 0.0f, 13.0f);
+    glVertex3f(-0.4f, 0.0f, 13.0f);
+    glEnd();
+
+    glBegin(GL_QUADS);
+    glNormal3f(0, 0, 1);
+    glVertex3f(-0.6f, -0.8f, 5.0f);
+    glVertex3f(0.6f, -0.8f, 5.0f);
+    glVertex3f(0.4f, 0.8f, 13.0f);
+    glVertex3f(-0.4f, 0.8f, 13.0f);
+    glEnd();
+
+    glColor3f(0.15f, 0.4f, 0.15f);
+    glBegin(GL_QUADS);
+    glNormal3f(0, 1, 0);
+    glVertex3f(-5.0f, 0.0f, 11.0f);
+    glVertex3f(5.0f, 0.0f, 11.0f);
+    glVertex3f(4.0f, 0.0f, 13.0f);
+    glVertex3f(-4.0f, 0.0f, 13.0f);
+    glEnd();
+
+    glPushMatrix();
+    glTranslatef(0.0f, 2.8f, 0.0f);
+    glRotatef(rotorAngle, 0.0f, 1.0f, 0.0f);
+
+    glColor3f(0.1f, 0.1f, 0.1f);
+
+    glPushMatrix();
+    glScalef(0.5f, 0.3f, 0.5f);
+    glutSolidSphere(1.0f, 8, 6);
+    glPopMatrix();
+
+    for (int i = 0; i < 3; i++) {
+        glPushMatrix();
+        glRotatef(i * 120.0f, 0.0f, 1.0f, 0.0f);
+        glColor3f(0.08f, 0.08f, 0.08f);
+        glBegin(GL_QUADS);
+        glNormal3f(0, 1, 0);
+        glVertex3f(-0.5f, 0.0f, 0.5f);
+        glVertex3f(0.5f, 0.0f, 0.5f);
+        glVertex3f(0.8f, 0.0f, 12.0f);
+        glVertex3f(-0.8f, 0.0f, 12.0f);
+        glEnd();
+        glPopMatrix();
+    }
+    glPopMatrix();
+
+    glPushMatrix();
+    glTranslatef(0.8f, 0.5f, 12.5f);
+    glRotatef(tailRotorAngle, 1.0f, 0.0f, 0.0f);
+
+    glColor3f(0.1f, 0.1f, 0.1f);
+    glPushMatrix();
+    glScalef(0.2f, 0.2f, 0.2f);
+    glutSolidSphere(1.0f, 6, 4);
+    glPopMatrix();
+
+    for (int i = 0; i < 2; i++) {
+        glPushMatrix();
+        glRotatef(i * 90.0f, 1.0f, 0.0f, 0.0f);
+        glColor3f(0.08f, 0.08f, 0.08f);
+        glBegin(GL_QUADS);
+        glNormal3f(1, 0, 0);
+        glVertex3f(0.1f, -0.3f, 0.0f);
+        glVertex3f(0.1f, 0.3f, 0.0f);
+        glVertex3f(0.1f, 0.5f, 3.5f);
+        glVertex3f(0.1f, -0.5f, 3.5f);
+        glEnd();
+        glPopMatrix();
+    }
+    glPopMatrix();
+
+    glColor3f(0.1f, 0.1f, 0.1f);
+
+    glBegin(GL_QUADS);
+    glNormal3f(0, 1, 0);
+    glVertex3f(-3.0f, -2.5f, -4.0f);
+    glVertex3f(-2.5f, -2.5f, -4.0f);
+    glVertex3f(-2.5f, -2.5f, 5.0f);
+    glVertex3f(-3.0f, -2.5f, 5.0f);
+    glEnd();
+
+    glBegin(GL_QUADS);
+    glNormal3f(0, 1, 0);
+    glVertex3f(2.5f, -2.5f, -4.0f);
+    glVertex3f(3.0f, -2.5f, -4.0f);
+    glVertex3f(3.0f, -2.5f, 5.0f);
+    glVertex3f(2.5f, -2.5f, 5.0f);
+    glEnd();
+
+    glColor3f(0.15f, 0.15f, 0.15f);
+    float suportPozitii[2][2] = { {-2.75f, -3.5f}, {2.75f, -3.5f} };
+    float suportZ[2] = { -2.5f, 3.5f };
+    for (int s = 0; s < 2; s++) {
+        for (int z = 0; z < 2; z++) {
+            glBegin(GL_LINES);
+            glVertex3f(0.0f, -1.5f, suportZ[z]);
+            glVertex3f(suportPozitii[s][0], -2.5f, suportZ[z]);
+            glEnd();
+        }
+    }
+
+    glDisable(GL_LIGHTING);
+    float timp = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+
+    if (fmod(timp, 1.0f) < 0.5f) {
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glPushMatrix();
+        glTranslatef(-3.0f, -2.5f, 0.0f);
+        glutSolidSphere(0.3f, 6, 6);
+        glPopMatrix();
+    }
+
+    if (fmod(timp, 1.0f) > 0.5f) {
+        glColor3f(0.0f, 1.0f, 0.0f);
+        glPushMatrix();
+        glTranslatef(3.0f, -2.5f, 0.0f);
+        glutSolidSphere(0.3f, 6, 6);
+        glPopMatrix();
+    }
+
+    if (fmod(timp, 0.5f) < 0.1f) {
+        glColor3f(1.0f, 1.0f, 1.0f);
+        glPushMatrix();
+        glTranslatef(0.0f, 3.5f, 0.0f);
+        glutSolidSphere(0.4f, 6, 6);
+        glPopMatrix();
+    }
+
+    glEnable(GL_LIGHTING);
+
+    GLfloat ambientOrig[] = { 0.15f, 0.15f, 0.2f, 1.0f };
+    glLightfv(GL_LIGHT0, GL_AMBIENT, ambientOrig);
+    glDisable(GL_COLOR_MATERIAL);
+    glEnable(GL_TEXTURE_2D);
+    glPopMatrix();
+}
+
+void DrawAirplane(float x, float y, float z, float angle, float bankAngle) {
+    glPushMatrix();
+    glTranslatef(x, y, z);
+    glRotatef(-angle, 0.0f, 1.0f, 0.0f);   
+    glRotatef(bankAngle, 0.0f, 0.0f, 1.0f); 
+    glRotatef(-8.0f, 1.0f, 0.0f, 0.0f);     
+
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_LIGHTING);
+
+
+    glColor3f(0.85f, 0.85f, 0.9f); 
+    glPushMatrix();
+    glScalef(1.0f, 1.0f, 6.0f);    
+    glutSolidSphere(2.0f, 12, 8);
+    glPopMatrix();
+
+    //Varful 
+    glColor3f(0.75f, 0.75f, 0.8f);
+    glPushMatrix();
+    glTranslatef(0.0f, 0.0f, -8.0f);
+    glRotatef(-90.0f, 1.0f, 0.0f, 0.0f);
+    glutSolidCone(1.5f, 4.0f, 10, 4);
+    glPopMatrix();
+
+    // Coada verticala
+    glColor3f(0.2f, 0.3f, 0.7f); 
+    glBegin(GL_TRIANGLES);
+    glNormal3f(-1.0f, 0.0f, 0.0f);
+    glVertex3f(0.0f, 2.0f, 8.0f);
+    glVertex3f(0.0f, 7.0f, 5.0f);
+    glVertex3f(0.0f, 2.0f, 4.0f);
+    glEnd();
+
+    // Coada orizontala 
+    glColor3f(0.85f, 0.85f, 0.9f);
+    glBegin(GL_QUADS);
+    glNormal3f(0.0f, 1.0f, 0.0f);
+    glVertex3f(-5.0f, 1.5f, 8.0f);
+    glVertex3f(5.0f, 1.5f, 8.0f);
+    glVertex3f(3.0f, 1.5f, 5.0f);
+    glVertex3f(-3.0f, 1.5f, 5.0f);
+    glEnd();
+
+    glColor3f(0.85f, 0.85f, 0.9f);
+    // Aripa stanga
+    glBegin(GL_QUADS);
+    glNormal3f(0.0f, 1.0f, 0.0f);
+    glVertex3f(-18.0f, 0.0f, 2.0f);  
+    glVertex3f(-18.0f, 0.0f, 4.0f);
+    glVertex3f(-1.5f, 0.0f, 1.0f);   
+    glVertex3f(-1.5f, 0.0f, -2.0f);  
+    glEnd();
+
+    // Aripa dreapta
+    glBegin(GL_QUADS);
+    glNormal3f(0.0f, 1.0f, 0.0f);
+    glVertex3f(1.5f, 0.0f, -2.0f);
+    glVertex3f(1.5f, 0.0f, 1.0f);
+    glVertex3f(18.0f, 0.0f, 4.0f);
+    glVertex3f(18.0f, 0.0f, 2.0f);
+    glEnd();
+
+    glColor3f(0.3f, 0.3f, 0.35f); 
+    float engineOffsets[2] = { -8.0f, 8.0f };
+    for (int e = 0; e < 2; e++) {
+        glPushMatrix();
+        glTranslatef(engineOffsets[e], -1.5f, 0.0f);
+        glScalef(1.0f, 1.0f, 2.5f);
+        glutSolidSphere(1.2f, 8, 6);
+        glPopMatrix();
+    }
+
+    glDisable(GL_LIGHTING);
+    float timp = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+
+    if (fmod(timp, 1.0f) < 0.5f) {
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glPushMatrix();
+        glTranslatef(-18.0f, 0.5f, 3.0f);
+        glutSolidSphere(0.4f, 6, 6);
+        glPopMatrix();
+    }
+
+    if (fmod(timp, 1.0f) > 0.5f) {
+        glColor3f(0.0f, 1.0f, 0.0f);
+        glPushMatrix();
+        glTranslatef(18.0f, 0.5f, 3.0f);
+        glutSolidSphere(0.4f, 6, 6);
+        glPopMatrix();
+    }
+
+    if (fmod(timp, 0.5f) < 0.1f) {
+        glColor3f(1.0f, 1.0f, 1.0f);
+        glPushMatrix();
+        glTranslatef(0.0f, -2.5f, 0.0f);
+        glutSolidSphere(0.5f, 6, 6);
+        glPopMatrix();
+    }
+
+    glEnable(GL_LIGHTING);
+    glEnable(GL_TEXTURE_2D);
+    glPopMatrix();
+}
+
+void DrawCircularCar(float cx, float cz, float circAngleDeg, int colorIdx) {
+    glPushMatrix();
+    glTranslatef(cx, -9.1f, cz);
+
+    float headingDeg = -circAngleDeg; 
+    glRotatef(headingDeg, 0.0f, 1.0f, 0.0f);
+    glScalef(1.0f, 0.9f, 1.0f);
+
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_LIGHTING);
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+    GLfloat ambientBoost[] = { 0.6f, 0.6f, 0.6f, 1.0f };
+    glLightfv(GL_LIGHT0, GL_AMBIENT, ambientBoost);
+
+    float colors[4][3] = {
+		{0.8f, 0.1f, 0.1f},   // 0 = Rosu
+        {0.9f, 0.6f, 0.0f},   // 1 = Galben
+		{0.1f, 0.3f, 0.8f},   // 2 = Albastru
+        {0.1f, 0.7f, 0.1f}    // 3 = Verde
+    };
+    int idx = colorIdx % 4;
+    glColor3f(colors[idx][0], colors[idx][1], colors[idx][2]);
+
+    glBegin(GL_QUADS);
+    glNormal3f(0, 0, -1);
+    // Fata
+    glVertex3f(-2.0f, 0.0f, -4.0f); glVertex3f(2.0f, 0.0f, -4.0f);
+    glVertex3f(2.0f, 1.5f, -4.0f);  glVertex3f(-2.0f, 1.5f, -4.0f);
+    glNormal3f(0, 0, 1);
+    // Spate
+    glVertex3f(2.0f, 0.0f, 4.0f);  glVertex3f(-2.0f, 0.0f, 4.0f);
+    glVertex3f(-2.0f, 1.5f, 4.0f); glVertex3f(2.0f, 1.5f, 4.0f);
+    glNormal3f(-1, 0, 0);
+    // Stanga
+    glVertex3f(-2.0f, 0.0f, 4.0f);  glVertex3f(-2.0f, 0.0f, -4.0f);
+    glVertex3f(-2.0f, 1.5f, -4.0f); glVertex3f(-2.0f, 1.5f, 4.0f);
+    glNormal3f(1, 0, 0);
+    // Dreapta
+    glVertex3f(2.0f, 0.0f, -4.0f); glVertex3f(2.0f, 0.0f, 4.0f);
+    glVertex3f(2.0f, 1.5f, 4.0f);  glVertex3f(2.0f, 1.5f, -4.0f);
+    glNormal3f(0, 1, 0);
+    // Sus
+    glVertex3f(-2.0f, 1.5f, -4.0f); glVertex3f(2.0f, 1.5f, -4.0f);
+    glVertex3f(2.0f, 1.5f, 4.0f);   glVertex3f(-2.0f, 1.5f, 4.0f);
+    glEnd();
+
+    // Habitaclu
+    glColor3f(0.12f, 0.12f, 0.12f);
+    glBegin(GL_QUADS);
+    glNormal3f(0, 0.7f, -0.7f);
+    glVertex3f(-1.6f, 1.5f, -2.0f); glVertex3f(1.6f, 1.5f, -2.0f);
+    glVertex3f(1.4f, 3.0f, -1.5f);  glVertex3f(-1.4f, 3.0f, -1.5f);
+    glNormal3f(0, 1, 0);
+    glVertex3f(-1.4f, 3.0f, -1.5f); glVertex3f(1.4f, 3.0f, -1.5f);
+    glVertex3f(1.4f, 3.0f, 1.5f);   glVertex3f(-1.4f, 3.0f, 1.5f);
+    glNormal3f(0, 0.7f, 0.7f);
+    glVertex3f(-1.4f, 3.0f, 1.5f);  glVertex3f(1.4f, 3.0f, 1.5f);
+    glVertex3f(1.6f, 1.5f, 2.5f);   glVertex3f(-1.6f, 1.5f, 2.5f);
+    glNormal3f(-1, 0, 0);
+    glVertex3f(-1.6f, 1.5f, 2.5f);  glVertex3f(-1.6f, 1.5f, -2.0f);
+    glVertex3f(-1.4f, 3.0f, -1.5f); glVertex3f(-1.4f, 3.0f, 1.5f);
+    glNormal3f(1, 0, 0);
+    glVertex3f(1.6f, 1.5f, -2.0f);  glVertex3f(1.6f, 1.5f, 2.5f);
+    glVertex3f(1.4f, 3.0f, 1.5f);   glVertex3f(1.4f, 3.0f, -1.5f);
+    glEnd();
+
+    // Faruri fata
+    glDisable(GL_LIGHTING);
+    glColor3f(1.0f, 1.0f, 0.7f);
+    glBegin(GL_QUADS);
+    glVertex3f(-1.8f, 0.5f, -4.01f); glVertex3f(-1.0f, 0.5f, -4.01f);
+    glVertex3f(-1.0f, 1.1f, -4.01f); glVertex3f(-1.8f, 1.1f, -4.01f);
+    glVertex3f(1.0f, 0.5f, -4.01f); glVertex3f(1.8f, 0.5f, -4.01f);
+    glVertex3f(1.8f, 1.1f, -4.01f); glVertex3f(1.0f, 1.1f, -4.01f);
+    glEnd();
+
+    // Stopuri spate
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glBegin(GL_QUADS);
+    glVertex3f(-1.8f, 0.5f, 4.01f); glVertex3f(-1.0f, 0.5f, 4.01f);
+    glVertex3f(-1.0f, 1.1f, 4.01f); glVertex3f(-1.8f, 1.1f, 4.01f);
+    glVertex3f(1.0f, 0.5f, 4.01f); glVertex3f(1.8f, 0.5f, 4.01f);
+    glVertex3f(1.8f, 1.1f, 4.01f); glVertex3f(1.0f, 1.1f, 4.01f);
+    glEnd();
+    glEnable(GL_LIGHTING);
+
+    DrawWheel(1.8f, -0.5f, -2.5f);
+    DrawWheel(-1.8f, -0.5f, -2.5f);
+    DrawWheel(1.8f, -0.5f, 2.5f);
+    DrawWheel(-1.8f, -0.5f, 2.5f);
+
+    glEnable(GL_TEXTURE_2D);
+    GLfloat ambientOrig[] = { 0.15f, 0.15f, 0.2f, 1.0f };
+    glLightfv(GL_LIGHT0, GL_AMBIENT, ambientOrig);
+
+    glDisable(GL_COLOR_MATERIAL);
+    glEnable(GL_TEXTURE_2D);
+    glPopMatrix();
     glPopMatrix();
 }
 
@@ -795,7 +1354,7 @@ void DrawCar() {
     glScalef(1.4f, 1.2f, 1.1f);
 
     GLfloat mat_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-    GLfloat mat_shininess[] = { 128.0f }; 
+    GLfloat mat_shininess[] = { 128.0f };
     glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
     glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);
 
@@ -804,22 +1363,22 @@ void DrawCar() {
 
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, texCar);
-    glColor3f(0.7f, 0.7f, 0.75f); 
+    glColor3f(0.7f, 0.7f, 0.75f);
 
     glBegin(GL_QUADS);
     // LATERALA STANGA
     glNormal3f(-1.0f, 0.0f, 0.0f);
-    glTexCoord2f(0.0f, 0.0f); glVertex3f(-2.5f, 0.0f, 5.0f);   
-    glTexCoord2f(1.0f, 0.0f); glVertex3f(-1.5f, 0.0f, -5.0f);  
-    glTexCoord2f(1.0f, 0.5f); glVertex3f(-1.5f, 1.8f, -5.0f);  
-    glTexCoord2f(0.0f, 0.5f); glVertex3f(-2.5f, 2.0f, 5.0f);   
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-2.5f, 0.0f, 5.0f);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-1.5f, 0.0f, -5.0f);
+    glTexCoord2f(1.0f, 0.5f); glVertex3f(-1.5f, 1.8f, -5.0f);
+    glTexCoord2f(0.0f, 0.5f); glVertex3f(-2.5f, 2.0f, 5.0f);
 
     // LATERALA DREAPTA
     glNormal3f(1.0f, 0.0f, 0.0f);
-    glTexCoord2f(0.0f, 0.0f); glVertex3f(1.5f, 0.0f, -5.0f);   
-    glTexCoord2f(1.0f, 0.0f); glVertex3f(2.5f, 0.0f, 5.0f);    
-    glTexCoord2f(1.0f, 0.5f); glVertex3f(2.5f, 2.0f, 5.0f);    
-    glTexCoord2f(0.0f, 0.5f); glVertex3f(1.5f, 1.8f, -5.0f);   
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(1.5f, 0.0f, -5.0f);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(2.5f, 0.0f, 5.0f);
+    glTexCoord2f(1.0f, 0.5f); glVertex3f(2.5f, 2.0f, 5.0f);
+    glTexCoord2f(0.0f, 0.5f); glVertex3f(1.5f, 1.8f, -5.0f);
 
     // FATA MASINII
     glNormal3f(0.0f, 0.0f, -1.0f);
@@ -828,7 +1387,7 @@ void DrawCar() {
     glTexCoord2f(1.0f, 0.6f); glVertex3f(1.5f, 1.8f, -5.0f);
     glTexCoord2f(0.0f, 0.6f); glVertex3f(-1.5f, 1.8f, -5.0f);
 
-    // SPATELE (Oblon)
+    // SPATELE 
     glNormal3f(0.0f, 0.0f, 1.0f);
     glTexCoord2f(0.0f, 0.5f); glVertex3f(2.5f, 0.0f, 5.0f);
     glTexCoord2f(1.0f, 0.5f); glVertex3f(-2.5f, 0.0f, 5.0f);
@@ -877,7 +1436,7 @@ void DrawCar() {
     glVertex3f(1.2f, 4.5f, -0.5f);
     glEnd();
 
-    glDisable(GL_LIGHTING); 
+    glDisable(GL_LIGHTING);
 
     glColor3f(1.0f, 1.0f, 0.8f);
     glPushMatrix();
@@ -940,7 +1499,289 @@ bool checkCarCollision(float nextX, float nextZ) {
     return false;
 }
 
+
+void UpdateMovingObjects(float dt) {
+    // ==================== MASINI GIRATORIU ====================
+    for (int i = 0; i < 3; i++) {
+        circCars[i].angle -= circCars[i].speed;
+        if (circCars[i].angle < 0.0f)
+            circCars[i].angle += 360.0f;
+    }
+
+    // ==================== AVION - MASINA DE STARI ====================
+    airplane.stateTimer -= dt;
+
+    switch (airplane.state) {
+
+    case AP_PARCAT:
+
+        airplane.speed = 0.0f;
+        airplane.y = -9.0f;
+        airplane.pitch = 0.0f;
+        airplane.bankAngle = 0.0f;
+        if (airplane.stateTimer <= 0.0f) {
+
+            airplane.state = AP_DECOLARE;
+            airplane.stateTimer = 6.0f; 
+            airplane.angle = RUNWAY_ANGLE;
+            printf("Avion: DECOLARE!\n");
+        }
+        break;
+
+    case AP_DECOLARE:
+    {
+        airplane.speed += 0.06f;
+        if (airplane.speed > 4.5f) airplane.speed = 4.5f;
+
+        float rad = airplane.angle * PI / 180.0f;
+        airplane.x += sin(rad) * airplane.speed;
+        airplane.z -= cos(rad) * airplane.speed;
+
+        if (airplane.speed > 2.5f) {
+            airplane.y += airplane.speed * 0.4f;
+            airplane.pitch = -18.0f; 
+        }
+        else {
+            airplane.pitch = 0.0f; 
+        }
+
+        if (airplane.y >= 150.0f) {
+            airplane.y = 150.0f;
+            airplane.pitch = 0.0f;
+            airplane.state = AP_ZBOR;
+            airplane.stateTimer = 20.0f + (rand() % 20);
+            airplane.timer = 5.0f;
+            printf("Avion: ZBOR!\n");
+        }
+        break;
+    }
+
+    case AP_ZBOR:
+        airplane.timer -= dt;
+        if (airplane.timer <= 0.0f) {
+            float deviere = -60.0f + (rand() % 121);
+            airplane.targetAngle = airplane.angle + deviere;
+            airplane.timer = 4.0f + (rand() % 40) * 0.1f;
+        }
+
+        {
+            float diff = airplane.targetAngle - airplane.angle;
+            while (diff > 180.0f)  diff -= 360.0f;
+            while (diff < -180.0f) diff += 360.0f;
+
+            float turnRate = 15.0f * dt;
+            if (fabs(diff) < turnRate) {
+                airplane.angle = airplane.targetAngle;
+                airplane.bankAngle = 0.0f;
+            }
+            else {
+                airplane.angle += (diff > 0 ? turnRate : -turnRate);
+                airplane.bankAngle = (diff > 0 ? -20.0f : 20.0f);
+            }
+        }
+
+        if (airplane.angle > 360.0f) airplane.angle -= 360.0f;
+        if (airplane.angle < 0.0f)   airplane.angle += 360.0f;
+
+        {
+            float rad = airplane.angle * PI / 180.0f;
+            airplane.x += sin(rad) * airplane.speed;
+            airplane.z -= cos(rad) * airplane.speed;
+        }
+
+        // Oscilatie altitudine
+        {
+            float timp = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+            airplane.y = 150.0f + sin(timp * 0.3f) * 8.0f;
+        }
+
+        // Mentine in zona hartii
+        {
+            float distFata = sqrt(airplane.x * airplane.x + airplane.z * airplane.z);
+
+            if (distFata > 600.0f) {
+                float urgenta = (distFata - 600.0f) / 200.0f;
+                if (urgenta > 1.0f) urgenta = 1.0f;
+
+                float angleSpre = atan2f(-airplane.x, airplane.z) * 180.0f / PI;
+                airplane.targetAngle = angleSpre;
+                airplane.timer = 2.0f;
+
+                if (distFata > 750.0f) {
+                    float diff = angleSpre - airplane.angle;
+                    while (diff > 180.0f)  diff -= 360.0f;
+                    while (diff < -180.0f) diff += 360.0f;
+                    airplane.angle += diff * urgenta * 0.1f;
+                }
+            }
+
+            if (distFata > 850.0f) {
+                airplane.x *= 0.95f;
+                airplane.z *= 0.95f;
+            }
+        }
+
+        if (airplane.stateTimer <= 0.0f) {
+            airplane.state = AP_ATERIZARE;
+
+            airplane.targetAngle = atan2f(
+                RUNWAY_X - airplane.x,
+                -(RUNWAY_Z - airplane.z)
+            ) * 180.0f / PI;
+            airplane.stateTimer = 30.0f; 
+            printf("Avion: ATERIZARE!\n");
+        }
+        break;
+
+    case AP_ATERIZARE:
+    {
+        float dx = RUNWAY_X - airplane.x;
+        float dz = RUNWAY_Z - airplane.z;
+        float dist = sqrt(dx * dx + dz * dz);
+
+        float angleSpre = atan2f(dx, -dz) * 180.0f / PI;
+
+        float diff = angleSpre - airplane.angle;
+        while (diff > 180.0f)  diff -= 360.0f;
+        while (diff < -180.0f) diff += 360.0f;
+
+        float turnRate = 60.0f * dt; 
+        if (fabs(diff) < turnRate) {
+            airplane.angle = angleSpre;
+            airplane.bankAngle = 0.0f;
+        }
+        else {
+            airplane.angle += (diff > 0 ? turnRate : -turnRate);
+            airplane.bankAngle = (diff > 0 ? -25.0f : 25.0f);
+        }
+
+        // Viteza constanta
+        airplane.speed = 3.0f;
+
+        // Miscare
+        float rad = airplane.angle * PI / 180.0f;
+        airplane.x += sin(rad) * airplane.speed;
+        airplane.z -= cos(rad) * airplane.speed;
+
+        float targetY = -9.0f + (dist / 500.0f) * 159.0f;
+        if (targetY < -9.0f) targetY = -9.0f;
+        if (targetY > airplane.y) targetY = airplane.y; 
+
+        float lerpSpeed = (dist < 100.0f) ? 0.08f : 0.04f;
+        airplane.y -= 0.3f; 
+        if (airplane.y < targetY) airplane.y = targetY;
+
+        airplane.pitch = 5.0f;
+
+        // Aterizat
+        if (airplane.y <= -8.5f || dist < 20.0f) {
+            airplane.x = RUNWAY_X;
+            airplane.z = RUNWAY_Z;
+            airplane.y = -9.0f;
+            airplane.speed = 0.0f;
+            airplane.pitch = 0.0f;
+            airplane.bankAngle = 0.0f;
+            airplane.angle = RUNWAY_ANGLE;
+            airplane.state = AP_PARCAT;
+            airplane.stateTimer = 6.0f;
+            printf("Avion: PARCAT!\n");
+        }
+
+        // Timeout - daca dureaza prea mult, forteaza aterizarea
+        if (airplane.stateTimer <= 0.0f) {
+            airplane.y -= 1.0f; 
+            if (airplane.y <= -9.0f) {
+                airplane.x = RUNWAY_X;
+                airplane.z = RUNWAY_Z;
+                airplane.y = -9.0f;
+                airplane.speed = 0.0f;
+                airplane.pitch = 0.0f;
+                airplane.bankAngle = 0.0f;
+                airplane.angle = RUNWAY_ANGLE;
+                airplane.state = AP_PARCAT;
+                airplane.stateTimer = 6.0f;
+                printf("Avion: PARCAT fortat!\n");
+            }
+            airplane.stateTimer = 0.1f; 
+        }
+        break;
+    }
+
+    // Timeout - daca nu gaseste pista
+    if (airplane.stateTimer <= 0.0f) {
+        airplane.targetAngle = atan2f(
+            RUNWAY_X - airplane.x,
+            -(RUNWAY_Z - airplane.z)
+        ) * 180.0f / PI;
+        airplane.stateTimer = 20.0f;
+    }
+    break;
+    }
+
+    // ==================== ELICOPTER ====================
+    helicopter.rotorAngle += 15.0f;
+    if (helicopter.rotorAngle >= 360.0f) helicopter.rotorAngle -= 360.0f;
+
+    helicopter.tailRotorAngle += 25.0f;
+    if (helicopter.tailRotorAngle >= 360.0f) helicopter.tailRotorAngle -= 360.0f;
+
+    float timpH = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+    helicopter.y = 60.0f + sin(timpH * 0.8f) * 5.0f;
+
+    helicopter.timer -= dt;
+    if (helicopter.timer <= 0.0f) {
+        float deviere = -90.0f + (rand() % 181);
+        helicopter.targetAngle = helicopter.angle + deviere;
+        helicopter.timer = 3.0f + (rand() % 50) * 0.1f;
+    }
+
+    {
+        float diff = helicopter.targetAngle - helicopter.angle;
+        while (diff > 180.0f)  diff -= 360.0f;
+        while (diff < -180.0f) diff += 360.0f;
+
+        float turnRate = 20.0f * dt;
+        if (fabs(diff) < turnRate) {
+            helicopter.angle = helicopter.targetAngle;
+            helicopter.bankAngle = 0.0f;
+        }
+        else {
+            helicopter.angle += (diff > 0 ? turnRate : -turnRate);
+            helicopter.bankAngle = (diff > 0 ? -15.0f : 15.0f);
+        }
+    }
+
+    helicopter.angle = fmod(helicopter.angle + 360.0f, 360.0f);
+
+    // Miscare
+    float hRad = helicopter.angle * PI / 180.0f;
+    helicopter.x += sin(hRad) * helicopter.speed;
+    helicopter.z -= cos(hRad) * helicopter.speed;
+
+    // Mentine in zona hartii
+    {
+        float distH = sqrt(helicopter.x * helicopter.x + helicopter.z * helicopter.z);
+        if (distH > 600.0f) {
+            float angleSpre = atan2f(-helicopter.x, helicopter.z) * 180.0f / PI;
+            helicopter.targetAngle = angleSpre;
+            helicopter.timer = 2.0f;
+        }
+        if (distH > 800.0f) {
+            helicopter.x *= 0.97f;
+            helicopter.z *= 0.97f;
+        }
+    }
+}
+
 void update(int value) {
+
+    if (!objectsInitialized) {
+        InitMovingObjects();
+        objectsInitialized = true;
+    }
+
+    float dt = 0.016f;
+
     if (isInCar) {
 
         if (keys['w'] || keys['W']) {
@@ -952,7 +1793,7 @@ void update(int value) {
             if (carSpeed < -1.0f) carSpeed = -1.0f;
         }
         else {
-            carSpeed *= 0.95f; 
+            carSpeed *= 0.95f;
         }
 
         if (fabs(carSpeed) > 0.1f) {
@@ -977,7 +1818,7 @@ void update(int value) {
             carZ += cos(rad) * 1.5f;
         }
 
-        float camDist = 55.0f; 
+        float camDist = 55.0f;
         camX = carX + sin(rad) * camDist;
         camZ = carZ + cos(rad) * camDist;
         camY = -10.0f + 15.0f;
@@ -985,6 +1826,8 @@ void update(int value) {
         camAngleY = -carAngle;
         camAngleX = 15.0f;
     }
+
+    UpdateMovingObjects(dt);
 
     glutPostRedisplay();
     glutTimerFunc(16, update, 0);
@@ -1007,23 +1850,38 @@ void display() {
 
     DrawRelief();
     DrawCircuit();
+    DrawRunway();      
     DrawRoadMarkings();
     DrawLake(300.0f, 300.0f, 80.0f);
     DrawLampPost(150.0f, 150.0f, 100.0f, false);
     DrawEnvironment();
     DrawCar();
+    // Avion 
+    DrawAirplane(airplane.x, airplane.y, airplane.z, airplane.angle, airplane.bankAngle);
+    //Elicopter
+    DrawHelicopter(helicopter.x, helicopter.y, helicopter.z,
+        helicopter.angle, helicopter.bankAngle,
+        helicopter.rotorAngle, helicopter.tailRotorAngle);
+
+    // Masini in sensul giratoriu 
+    for (int i = 0; i < 3; i++) {
+        float rad = circCars[i].angle * PI / 180.0f;
+        float cx = cos(rad) * circCars[i].radius;
+        float cz = sin(rad) * circCars[i].radius;
+        DrawCircularCar(cx, cz, circCars[i].angle, circCars[i].colorIdx);
+    }
     glutSwapBuffers();
 }
 
 /* ==================== INPUT HANDLERS ==================== */
 
 void keyboard(unsigned char key, int x, int y) {
-    keys[key] = true; 
+    keys[key] = true;
 
     switch (key) {
     case 'e': case 'E':
         isInCar = !isInCar;
-        if (!isInCar) camY = 3.0f; 
+        if (!isInCar) camY = 3.0f;
         break;
     case 27: // ESC
         if (isInCar) isInCar = false;
@@ -1048,7 +1906,7 @@ void keyboard(unsigned char key, int x, int y) {
 }
 
 void keyboardUp(unsigned char key, int x, int y) {
-    keys[key] = false; 
+    keys[key] = false;
 }
 
 
@@ -1115,8 +1973,8 @@ int main(int argc, char** argv) {
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
     glutKeyboardFunc(keyboard);
-    glutKeyboardUpFunc(keyboardUp); 
-    glutTimerFunc(0, update, 0);    
+    glutKeyboardUpFunc(keyboardUp);
+    glutTimerFunc(0, update, 0);
     glutMouseFunc(mouse);
     glutMotionFunc(motion);
     glutMainLoop();
